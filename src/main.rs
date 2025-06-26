@@ -5,7 +5,7 @@ struct GroupSchedule {
 }
 #[derive(Debug)]
 struct GroupDetail {
-    class: Vec<String>,
+    class: String,
     time: String,
 }
 struct Credentials {
@@ -15,15 +15,64 @@ struct Credentials {
 }
 
 impl GroupSchedule {
-    fn vec_from_docx(
-        docx: docx_rs::Docx,
-    ) -> Result<Vec<GroupSchedule>, Box<dyn std::error::Error>> {
+    fn string_from_cell(cell: &docx_rs::TableCell) -> String {
+        cell.children
+            .iter()
+            .filter_map(|c| match c {
+                docx_rs::TableCellContent::Paragraph(p) => Some(p),
+                _ => None,
+            })
+            .map(|p| format!("{}\n", p.raw_text()))
+            .collect()
+    }
+    fn schedule_from_vec(v: Vec<Vec<String>>) -> Vec<GroupSchedule> {
+        todo!()
+    }
+    fn vec_from_table(
+        table: Box<docx_rs::Table>,
+    ) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+        let mut converted_table: Vec<Vec<String>> = Vec::new();
+        let row_count = table.rows.len();
+
+        //checks
+        if (row_count % 2 == 1) & (row_count < 4) {
+            return Err(format!("row count {row_count} incompatible!").into());
+        };
+        // TODO: use table.rows.split_at(row_count / 2)! The table is formed like a union
+        let rows: Vec<Vec<docx_rs::TableRowChild>> = table
+            .rows
+            .iter()
+            .filter_map(|row| match row {
+                docx_rs::TableChild::TableRow(r) => Some(r),
+            })
+            .map(|r| r.cells.clone())
+            .collect();
+        for row in rows {
+            let cells: Vec<&docx_rs::TableCell> = row
+                .iter()
+                .filter_map(|cell| match cell {
+                    docx_rs::TableRowChild::TableCell(c) => Some(c),
+                })
+                .collect();
+            let converted_row: Vec<String> = cells
+                .iter()
+                .map(|c| GroupSchedule::string_from_cell(c))
+                .collect();
+            converted_table.push(converted_row);
+        }
+        match converted_table.len() {
+            0 => return Err("Coundn't form a vec from table!".into()),
+            _ => return Ok(converted_table),
+        }
+    }
+    fn vec_from_docx(docx: docx_rs::Docx) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
         let mut table: Option<Box<docx_rs::Table>> = None;
 
         //searching through the docx to find docx_rs::Table
+        //idk who made these files to have 2 tables
         for c in docx.document.children {
             if let docx_rs::DocumentChild::Table(t) = c {
-                const MINIMAL_ROWS: usize = 2; //idk who made these files to have 2 tables
+                const MINIMAL_ROWS: usize = 4;
                 if t.rows.len() <= MINIMAL_ROWS {
                     continue;
                 }
@@ -33,45 +82,10 @@ impl GroupSchedule {
         }
 
         //converting docx_rs::Table to Vec<cargo::GroupSchedule>
-        let mut groups: Vec<GroupSchedule>;
-
         if let Some(table) = table {
-            let row_count = table.rows.len();
-
-            //checks
-            if row_count % 2 == 1 {
-                return Err(format!("row count {row_count} incompatible!").into());
-            };
-            let mut reformatted_table: Vec<Vec<String>> = Vec::new();
-            for (i, row) in table.rows.iter().enumerate() {}
-
-            //convert docx_rs::Table to a more sane Vec<Vec<>>
-            //row
-            for row in table.rows {
-                let docx_rs::TableChild::TableRow(row) = row;
-                //cell
-                for cell in row.cells {
-                    print!("\t[");
-                    let mut cell_text = String::new();
-                    let docx_rs::TableRowChild::TableCell(cell) = cell;
-                    //cell data
-                    for (i, child) in cell.children.iter().enumerate() {
-                        let cell_subtext = match child {
-                            docx_rs::TableCellContent::Paragraph(text) => text.raw_text(),
-                            _ => continue,
-                        };
-                        if cell_text.is_empty() {
-                            cell_text = cell_subtext;
-                        } else {
-                            cell_text = format!("{}, {}", cell_text, cell_subtext);
-                        }
-                    }
-                    print!("{}]", cell_text);
-                }
-                println!();
-            }
+            return GroupSchedule::vec_from_table(table);
         }
-        Err("Group not formed!".into())
+        Err("Problem converting docx to Vec<Vec<String>>!".into())
     }
     fn get_group_by_name(
         groups: Vec<GroupSchedule>,
@@ -87,11 +101,13 @@ impl GroupSchedule {
 }
 // NOTE:list_directories -> user interaction -> list_docx_files -> user interaction ->
 // download_docx
-// TODO:'()' as Err doen't look right, fix it(?)
-fn list_directories(credentials: &Credentials) -> Result<Vec<String>, ()> {
+fn list_directories(credentials: &Credentials) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     todo!()
 }
-fn list_docx_files(credentials: &Credentials, directory: &String) -> Result<Vec<String>, ()> {
+fn list_docx_files(
+    credentials: &Credentials,
+    directory: &String,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     todo!()
 }
 fn download_docx_file(
