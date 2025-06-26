@@ -1,9 +1,9 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct GroupSchedule {
     group_name: String,
     details: Vec<GroupDetail>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct GroupDetail {
     class: String,
     time: String,
@@ -15,6 +15,29 @@ struct Credentials {
 }
 
 impl GroupSchedule {
+    fn schedule_from_vec(v: Vec<Vec<String>>) -> Vec<GroupSchedule> {
+        if (v.len() % 2 == 0) | (v.len() <= 2) {
+            println!("{}", v.len());
+            return Vec::new();
+        }
+        let mut groups: Vec<GroupSchedule> = Vec::with_capacity(v[0][1..].len());
+        for (i, cell) in v[0][1..].iter().enumerate() {
+            groups.push(GroupSchedule {
+                group_name: cell.to_string(),
+                details: Vec::with_capacity(v[1..].len()),
+            });
+        }
+        for (i, row) in v[1..].iter().enumerate() {
+            for (j, cell) in row[1..].iter().enumerate() {
+                groups[j].details.push(GroupDetail {
+                    class: v[0][j + 1].to_string(),
+                    time: v[i + 1][0].to_string(),
+                })
+            }
+        }
+        println!("{:#?}", groups);
+        return groups;
+    }
     fn string_from_cell(cell: &docx_rs::TableCell) -> String {
         cell.children
             .iter()
@@ -25,14 +48,11 @@ impl GroupSchedule {
             .map(|p| format!("{}\n", p.raw_text()))
             .collect()
     }
-    fn schedule_from_vec(v: Vec<Vec<String>>) -> Vec<GroupSchedule> {
-        todo!()
-    }
     fn vec_from_table(
         table: Box<docx_rs::Table>,
     ) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
-        let mut converted_table: Vec<Vec<String>> = Vec::new();
         let row_count = table.rows.len();
+        let mut converted_table: Vec<Vec<String>> = Vec::with_capacity(row_count);
 
         //checks
         if (row_count % 2 == 1) & (row_count < 4) {
@@ -126,4 +146,19 @@ fn vec_from_docx_is_err_test() {
     let groups = GroupSchedule::vec_from_docx(docx);
     println!("{:#?}", groups);
     assert!(groups.is_ok());
+}
+#[test]
+fn schedule_from_vec_test() {
+    let buf = std::fs::read("schedule.docx").unwrap();
+    let docx = docx_rs::read_docx(&buf).unwrap();
+
+    let groups = GroupSchedule::vec_from_docx(docx);
+    assert!(groups.is_ok());
+    let groups = groups.unwrap();
+    let (left, right) = groups.split_at(groups.len() / 2);
+    let (left, right) = (
+        GroupSchedule::schedule_from_vec(Vec::from(left)),
+        GroupSchedule::schedule_from_vec(Vec::from(right)),
+    );
+    println!("right: {:#?}\nleft: {:#?}", right, left);
 }
